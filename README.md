@@ -1,119 +1,133 @@
-# 💳 Payment API
+# Payment API
 
-API de pagamentos desenvolvida em Java + Spring Boot, com foco em arquitetura limpa, logging estruturado e boas práticas de backend.
+API de pagamentos Pix em Java + Spring Boot com Clean Architecture, Kafka (KRaft), Postgres, Prometheus, Grafana e Jaeger.
 
----
+**Documentação de arquitetura:**
+- [docs/architecture.md](docs/architecture.md) — domínio, fluxos, API, pacotes, idempotência
+- [docs/devops-flow.md](docs/devops-flow.md) — pipeline CI/CD + observabilidade (Mermaid)
 
-## 🚀 Objetivo
+## Stack
 
-Simular um sistema real de pagamentos aplicando:
+| Camada | Tecnologia |
+|---|---|
+| Runtime | Java 21 LTS |
+| Framework | Spring Boot 3.5.3 |
+| Messaging | Kafka 3.9 (KRaft — sem Zookeeper) |
+| Persistence | PostgreSQL 18 |
+| Métricas | Actuator + Micrometer + Prometheus + Grafana |
+| Tracing | Micrometer Tracing + OpenTelemetry → Jaeger |
+| Cache | Redis 7 (pré-instalado, profile `cache`) |
+| Testes | JUnit 5 + Testcontainers |
+| Qualidade | Spotless (GJF AOSP) + Checkstyle |
 
-* Arquitetura em camadas
-* Logs estruturados (5W1H)
-* Tratamento global de erros
-* Boas práticas de versionamento
-
----
-
-## 🏗️ Arquitetura
-
-O sistema segue um fluxo baseado em CI/CD com separação clara entre aplicação, persistência e observabilidade.
-
-![DevOps Flow](./docs/devops-flow.png)
-
-
-```
-src/main/java/dev/leandromoraes/paymentapi
-├── adapters
-│   └── in
-│       └── web
-├── application
-├── domain
-├── infrastructure
-│   └── logger
-└── presentation
-└── handler
-```
----
-
-## ⚙️ Tecnologias
-
-* Java 21+
-* Spring Boot
-* Maven
-* PostgreSQL (Docker)
-* Redis (Docker)
-
----
-
-## 🐳 Infra local
+## Quickstart
 
 ```bash
-docker-compose up -d
+# 1. Variáveis de ambiente
+cp .env.example .env
+
+# 2. Subir toda a infra + app
+make up
+
+# 3. Status
+docker compose ps
 ```
 
----
+| URL | Descrição |
+|---|---|
+| `GET /ping` | Smoke test |
+| `GET /actuator/health` | Health probe |
+| `GET /actuator/prometheus` | Métricas Prometheus |
+| http://localhost:8090 | Kafka UI |
+| http://localhost:9090 | Prometheus |
+| http://localhost:3000 | Grafana — Payment Overview |
+| http://localhost:16686 | Jaeger — traces |
 
-## 📡 Endpoints
+## Subir Redis (opcional)
 
-### Health Check
+Redis está pré-instalado mas **não sobe por padrão**:
 
-```http
-GET /health
+```bash
+docker compose --profile cache up -d
 ```
 
-Response:
+## Makefile
 
-```json
-{
-  "status": "UP"
-}
+```
+make up       # docker compose up -d --build
+make down     # docker compose down (mantém volumes)
+make clean    # docker compose down -v (apaga volumes)
+make logs     # docker compose logs -f app
+make test     # ./mvnw test (sem Docker)
+make verify   # ./mvnw verify (com Testcontainers — requer Docker)
+make format   # ./mvnw spotless:apply
+make db       # psql no container postgres
 ```
 
----
+## Qualidade de código
 
-## 📊 Logging (5W1H)
+```bash
+# Formatar
+./mvnw spotless:apply         # ou: make format
 
-O projeto utiliza logs estruturados no padrão:
+# Verificar formatação (GJF AOSP, 4-space)
+./mvnw spotless:check
 
-* where → onde aconteceu
-* why → por que aconteceu
-* when → quando aconteceu
-* who → quem causou
-* what → o que aconteceu
-* how → como aconteceu
+# Verificar estilo (Checkstyle)
+./mvnw checkstyle:check
 
-Exemplo:
-
-```json
-{
-  "where": "HealthController",
-  "what": "health_check",
-  "why": "system_monitoring",
-  "who": "system",
-  "how": "GET /health",
-  "when": "2026-05-04T16:00:00"
-}
+# CI roda os dois antes dos testes:
+./mvnw spotless:check && ./mvnw checkstyle:check && ./mvnw test
 ```
 
----
+## Pacotes (Clean Architecture)
 
-## ⚠️ Tratamento de Erros
+```
+com.lmoraesdev.payment
+├── adapter
+│   ├── in.web          ← controllers, exception handler
+│   └── out
+│       ├── messaging   ← Kafka producers (futuro)
+│       └── persistence ← JPA repositories (futuro)
+├── application
+│   ├── port.in         ← interfaces de entrada (futuro)
+│   ├── port.out        ← interfaces de saída (futuro)
+│   └── usecase         ← casos de uso (futuro)
+├── config
+│   └── logging         ← Logger5w1h estruturado
+└── domain
+    ├── event           ← domain events (futuro)
+    ├── exception       ← DomainException base
+    └── model           ← entidades / value objects (futuro)
+```
 
-Implementado com `@RestControllerAdvice`, garantindo:
+## Testes
 
-* respostas padronizadas
-* logging estruturado
-* desacoplamento da lógica de negócio
+```bash
+# Unitários (sem Docker)
+./mvnw test
 
----
+# Integração — sobe Postgres 18 via Testcontainers
+./mvnw verify
+```
 
-## 🧪 Status
+## Git hooks
 
-Em desenvolvimento
+```bash
+git config core.hooksPath .githooks
+```
 
----
+| Hook | O que faz |
+|---|---|
+| `pre-push` | Executa `./mvnw verify` antes de cada push |
+| `commit-msg` | Valida formato Conventional Commits |
 
-## 👨‍💻 Autor
+Formato de commit: `tipo(escopo): descrição`
+Tipos: `feat fix docs style refactor test chore build ci perf revert`
 
-![Leandro-Moraes](https://www.linkedin.com/in/lmoraesdev/)
+## CI
+
+| Branch / PR | Jobs |
+|---|---|
+| `develop` push | Lint (Spotless + Checkstyle) + unit tests |
+| `main` push / PR → main | Lint + unit tests + full-verify + docker build |
