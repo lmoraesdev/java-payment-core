@@ -149,6 +149,12 @@
 						</goals>
 					</execution>
 				</executions>
+				<configuration>
+					<systemPropertyVariables>
+						<!-- Docker Desktop (WSL2) requires API >= 1.40; docker-java defaults to 1.24 -->
+						<api.version>1.44</api.version>
+					</systemPropertyVariables>
+				</configuration>
 			</plugin>
 
 			<!-- ── Code formatter — run: ./mvnw spotless:apply ─────────────── -->
