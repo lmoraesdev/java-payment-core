@@ -1,0 +1,8 @@
+#!/bin/sh
+# Run full Maven verify (unit + integration tests) before every push.
+# Enable with: git config core.hooksPath .githooks
+set -e
+
+echo ">>> pre-push: running ./mvnw verify ..."
+./mvnw verify
+echo ">>> pre-push: OK"
