@@ -1,60 +1,60 @@
 name: CI
 
 on:
-  pull_request:
-    branches: ["main"]
   push:
-    branches: ["main"]
+    branches: [develop, main]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: Build and Test
+  unit-tests:
+    name: Lint + Unit Tests
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_DB: payment_db
-          POSTGRES_USER: admin
-          POSTGRES_PASSWORD: admin_pass
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U admin -d payment_db"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-      redis:
-        image: redis:alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    env:
-      DB_HOST: localhost
-      DB_NAME: payment_db
-      DB_USER: admin
-      DB_PASSWORD: admin_pass
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
           cache: maven
 
-      - name: Run tests
+      - name: Check formatting (Spotless)
+        run: ./mvnw spotless:check
+
+      - name: Check style (Checkstyle)
+        run: ./mvnw checkstyle:check
+
+      - name: Run unit tests
         run: ./mvnw test
+
+  full-verify:
+    name: Full Verify + Docker Build
+    # Runs on pushes to main and on PRs targeting main
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Run full verify (unit + integration tests)
+        run: ./mvnw verify
+
+      - name: Build Docker image
+        run: docker build -t payment-api:ci .

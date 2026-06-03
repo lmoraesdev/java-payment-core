@@ -4,6 +4,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# Secrets — never commit real env file
+.env
+!.env.example
+
 ### STS ###
 .apt_generated
 .classpath
