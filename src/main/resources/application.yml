@@ -48,5 +48,6 @@ logging:
   level:
     root: INFO
     com.lmoraesdev.payment: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] %X{traceId} %logger{36} - %msg%n"
+  structured:
+    format:
+      console: ecs
