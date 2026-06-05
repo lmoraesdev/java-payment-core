@@ -1,8 +1,7 @@
 package com.lmoraesdev.payment.adapter.in.web;
 
-import java.math.BigDecimal;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 
-public record CreateChargeRequest(@NotNull @Positive BigDecimal amount) {
-}
+public record CreateChargeRequest(@NotNull @Positive BigDecimal amount) {}

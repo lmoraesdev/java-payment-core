@@ -10,22 +10,17 @@ public class Charge {
     private ChargeStatus status;
     private final Instant createdAt;
 
-    private Charge(UUID id, Money amount, ChargeStatus status, Instant createdAt){
+    private Charge(UUID id, Money amount, ChargeStatus status, Instant createdAt) {
         this.id = id;
         this.amount = amount;
         this.status = status;
         this.createdAt = createdAt;
     }
 
-    public static Charge create(Money amount){
+    public static Charge create(Money amount) {
         Objects.requireNonNull(amount, "O montante (Money) é obrigatório");
 
-        return new Charge(
-            UUID.randomUUID(),
-            amount,
-            ChargeStatus.ACTIVE,
-            Instant.now()
-        );
+        return new Charge(UUID.randomUUID(), amount, ChargeStatus.ACTIVE, Instant.now());
     }
 
     public static Charge restore(UUID id, Money amount, ChargeStatus status, Instant createdAt) {

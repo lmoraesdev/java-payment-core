@@ -1,9 +1,9 @@
 package com.lmoraesdev.payment.domain.model;
 
 public enum ChargeStatus {
-  PENDING,
-  ACTIVE,
-  PAID,
-  EXPIRED,
-  CANCELLED
+    PENDING,
+    ACTIVE,
+    PAID,
+    EXPIRED,
+    CANCELLED
 }

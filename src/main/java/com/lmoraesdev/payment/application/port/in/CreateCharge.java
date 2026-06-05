@@ -1,9 +1,5 @@
 package com.lmoraesdev.payment.application.port.in;
 
 public interface CreateCharge {
-  CreateChargeResult  create(CreateChargeCommand command);
+    CreateChargeResult create(CreateChargeCommand command);
 }
-
-
-
-

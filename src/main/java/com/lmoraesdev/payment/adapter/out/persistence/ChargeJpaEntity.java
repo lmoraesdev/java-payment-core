@@ -1,18 +1,15 @@
 package com.lmoraesdev.payment.adapter.out.persistence;
 
+import com.lmoraesdev.payment.domain.model.ChargeStatus;
+import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.lmoraesdev.payment.domain.model.ChargeStatus;
-
-import jakarta.persistence.*;
-
 @Entity
 @Table(name = "charges")
 public class ChargeJpaEntity {
-    @Id
-    private UUID id;
+    @Id private UUID id;
 
     @Column(nullable = false)
     private BigDecimal amount;
@@ -24,21 +21,21 @@ public class ChargeJpaEntity {
     @Column(nullable = false)
     private Instant createdAt;
 
-    protected ChargeJpaEntity(){}
+    protected ChargeJpaEntity() {}
 
-    public UUID getId(){
+    public UUID getId() {
         return id;
     }
 
-    public void setId(UUID id){
+    public void setId(UUID id) {
         this.id = id;
     }
 
-    public BigDecimal getAmount(){
+    public BigDecimal getAmount() {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount){
+    public void setAmount(BigDecimal amount) {
         this.amount = amount;
     }
 
@@ -46,16 +43,15 @@ public class ChargeJpaEntity {
         return status;
     }
 
-    public void setStatus(ChargeStatus status){
+    public void setStatus(ChargeStatus status) {
         this.status = status;
     }
 
-    public Instant getCreatedAt(){
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(Instant createdAt){
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
-
 }
