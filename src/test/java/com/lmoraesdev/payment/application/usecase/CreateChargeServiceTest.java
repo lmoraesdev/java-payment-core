@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.lmoraesdev.payment.application.port.in.CreateChargeCommand;
 import com.lmoraesdev.payment.application.port.in.CreateChargeResult;
 import com.lmoraesdev.payment.application.port.out.ChargeRepository;
+import com.lmoraesdev.payment.domain.exception.InvalidAmountException;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
 import java.math.BigDecimal;
 import java.util.stream.Stream;
@@ -60,16 +61,16 @@ class CreateChargeServiceTest {
     }
 
     @Test
-    @DisplayName("propaga exceção para amount zero ou negativo")
+    @DisplayName("propaga InvalidAmountException para amount zero ou negativo")
     void propagatesExceptionForInvalidAmount() {
         assertThatThrownBy(() -> service.create(new CreateChargeCommand(BigDecimal.ZERO)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidAmountException.class);
     }
 
     @Test
-    @DisplayName("propaga exceção para amount nulo")
+    @DisplayName("propaga InvalidAmountException para amount nulo")
     void propagatesExceptionForNullAmount() {
         assertThatThrownBy(() -> service.create(new CreateChargeCommand(null)))
-                .isInstanceOf(NullPointerException.class);
+                .isInstanceOf(InvalidAmountException.class);
     }
 }

@@ -3,6 +3,7 @@ package com.lmoraesdev.payment.domain.model;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.lmoraesdev.payment.domain.exception.InvalidAmountException;
 import java.math.BigDecimal;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -37,13 +38,13 @@ class MoneyTest {
         if (c.valid()) {
             assertThatNoException().isThrownBy(() -> new Money(value));
         } else {
-            assertThatThrownBy(() -> new Money(value)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new Money(value)).isInstanceOf(InvalidAmountException.class);
         }
     }
 
     @Test
     @DisplayName("rejeita amount nulo")
     void rejectsNull() {
-        assertThatThrownBy(() -> new Money(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new Money(null)).isInstanceOf(InvalidAmountException.class);
     }
 }
