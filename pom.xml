@@ -91,6 +91,12 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<groupId>net.datafaker</groupId>
+			<artifactId>datafaker</artifactId>
+			<version>2.4.2</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-testcontainers</artifactId>
 			<scope>test</scope>
@@ -150,11 +156,35 @@
 					</execution>
 				</executions>
 				<configuration>
+					<!-- @{argLine} late-binding picks up JaCoCo agent set in initialize phase -->
+					<argLine>@{argLine}</argLine>
 					<systemPropertyVariables>
 						<!-- Docker Desktop (WSL2) requires API >= 1.40; docker-java defaults to 1.24 -->
 						<api.version>1.44</api.version>
 					</systemPropertyVariables>
 				</configuration>
+			</plugin>
+
+			<!-- ── Coverage — report at target/site/jacoco/index.html ──────── -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.13</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 
 			<!-- ── Code formatter — run: ./mvnw spotless:apply ─────────────── -->
