@@ -20,6 +20,9 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  mvc:
+    problemdetails:
+      enabled: true
   data:
     redis:
       repositories:
