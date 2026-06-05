@@ -1,7 +1,12 @@
 package com.lmoraesdev.payment.adapter.out.persistence;
 
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
