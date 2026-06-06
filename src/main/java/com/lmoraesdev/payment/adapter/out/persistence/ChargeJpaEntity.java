@@ -7,7 +7,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -16,8 +15,8 @@ import java.util.UUID;
 public class ChargeJpaEntity {
     @Id private UUID id;
 
-    @Column(nullable = false)
-    private BigDecimal amount;
+    @Column(name = "amount_centavos", nullable = false)
+    private Long amountCentavos;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -36,12 +35,12 @@ public class ChargeJpaEntity {
         this.id = id;
     }
 
-    public BigDecimal getAmount() {
-        return amount;
+    public Long getAmountCentavos() {
+        return amountCentavos;
     }
 
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
+    public void setAmountCentavos(Long amountCentavos) {
+        this.amountCentavos = amountCentavos;
     }
 
     public ChargeStatus getStatus() {

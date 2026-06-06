@@ -54,6 +54,7 @@ com.lmoraesdev.payment
 
 Decisões de projeto:
 - **Domínio puro** — `Charge`, `Money`, `ChargeStatus` sem nenhuma anotação de framework
+- **Armazenamento monetário em centavos** — `amount_centavos BIGINT` no banco; `Money` normaliza para scale=2 no domínio; o mapper converte nos dois sentidos. Elimina risco de ponto flutuante em operações financeiras.
 - **Erros tipados** — `InvalidAmountException extends DomainException` → 422; genéricos → 500
 - **Logging estratégico** — só o use case loga o evento de negócio (`charge_created`); controller e adapters não logam (OTel/Jaeger cobre o fluxo)
 - **Problem Details (RFC 9457)** — todos os erros retornam `ProblemDetail` com `traceId`
@@ -116,7 +117,7 @@ Content-Type: application/json
 | `http://localhost:8080/actuator/health` | Status do app, banco e dependências |
 | `http://localhost:8080/actuator/prometheus` | Métricas no formato Prometheus |
 | `http://localhost:9090` | Prometheus — séries temporais, targets ativos |
-| `http://localhost:3000` | Grafana — dashboard "Payment Overview" (admin/admin) |
+| `http://localhost:3000` | Grafana — dashboard "Payment Overview" (credenciais do `.env`) |
 | `http://localhost:16686` | Jaeger — traces distribuídos por operação |
 | `http://localhost:8090` | Kafka UI — tópicos, consumer groups, mensagens |
 
@@ -159,7 +160,7 @@ Relatório JaCoCo gerado em `target/site/jacoco/index.html` após `./mvnw verify
 ./mvnw checkstyle:check # estilo (roda no CI)
 ```
 
-**Git hooks** (ativar uma vez por clone):
+**Git hooks** — shell scripts em `.githooks/` (ativar uma vez por clone):
 ```bash
 git config core.hooksPath .githooks
 ```
@@ -170,6 +171,8 @@ git config core.hooksPath .githooks
 | `pre-push` | Executa `./mvnw verify` antes de subir |
 
 Formato de commit: `tipo(escopo): descrição` — tipos: `feat fix docs style refactor test chore build ci perf revert`.
+
+> **Nota:** os hooks são scripts shell nativos (`.githooks/`). Husky está previsto para substituí-los em versão futura.
 
 **Makefile:**
 ```
