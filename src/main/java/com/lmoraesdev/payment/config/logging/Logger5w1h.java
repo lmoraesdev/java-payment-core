@@ -1,12 +1,10 @@
 package com.lmoraesdev.payment.config.logging;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.spi.LoggingEventBuilder;
 
 public class Logger5w1h {
-
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final Logger logger;
 
@@ -19,26 +17,26 @@ public class Logger5w1h {
     }
 
     public void info(Log5w1h data) {
-        logger.info(toJson(data));
+        withFields(logger.atInfo(), data).log();
     }
 
     public void debug(Log5w1h data) {
-        logger.debug(toJson(data));
+        withFields(logger.atDebug(), data).log();
     }
 
     public void warn(Log5w1h data) {
-        logger.warn(toJson(data));
+        withFields(logger.atWarn(), data).log();
     }
 
-    public void error(Log5w1h data, Throwable exception) {
-        logger.error(toJson(data), exception);
+    public void error(Log5w1h data, Throwable cause) {
+        withFields(logger.atError(), data).setCause(cause).log();
     }
 
-    private String toJson(Log5w1h data) {
-        try {
-            return MAPPER.writeValueAsString(data);
-        } catch (Exception exception) {
-            return data.toString();
-        }
+    private LoggingEventBuilder withFields(LoggingEventBuilder builder, Log5w1h data) {
+        return builder.addKeyValue("where", data.where())
+                .addKeyValue("why", data.why())
+                .addKeyValue("who", data.who())
+                .addKeyValue("what", data.what())
+                .addKeyValue("how", data.how());
     }
 }
