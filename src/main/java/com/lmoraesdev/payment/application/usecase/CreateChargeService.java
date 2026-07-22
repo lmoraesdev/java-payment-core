@@ -4,11 +4,20 @@ import com.lmoraesdev.payment.application.port.in.CreateCharge;
 import com.lmoraesdev.payment.application.port.in.CreateChargeCommand;
 import com.lmoraesdev.payment.application.port.in.CreateChargeResult;
 import com.lmoraesdev.payment.application.port.out.ChargeRepository;
+import com.lmoraesdev.payment.application.port.out.IdempotencyPort;
+import com.lmoraesdev.payment.application.port.out.IdempotencyPort.StoredIdempotency;
 import com.lmoraesdev.payment.application.port.out.OutboxEventPort;
 import com.lmoraesdev.payment.config.logging.Logger5w1hBuilder;
 import com.lmoraesdev.payment.domain.event.ChargeCreatedEvent;
+import com.lmoraesdev.payment.domain.exception.IdempotencyConflictException;
 import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.Money;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +25,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class CreateChargeService implements CreateCharge {
     private final ChargeRepository chargeRepository;
     private final OutboxEventPort outboxEventPort;
+    private final IdempotencyPort idempotencyPort;
 
-    public CreateChargeService(ChargeRepository chargeRepository, OutboxEventPort outboxEventPort) {
+    public CreateChargeService(
+            ChargeRepository chargeRepository,
+            OutboxEventPort outboxEventPort,
+            IdempotencyPort idempotencyPort) {
         this.chargeRepository = chargeRepository;
         this.outboxEventPort = outboxEventPort;
+        this.idempotencyPort = idempotencyPort;
     }
 
     @Override
@@ -27,6 +41,12 @@ public class CreateChargeService implements CreateCharge {
     public CreateChargeResult create(CreateChargeCommand command) {
 
         Money amount = new Money(command.amount());
+        String requestHash = hash(command.amount());
+
+        Optional<StoredIdempotency> existing = idempotencyPort.findByKey(command.idempotencyKey());
+        if (existing.isPresent()) {
+            return replay(existing.get(), requestHash, command.idempotencyKey());
+        }
 
         Charge charge = Charge.create(amount);
 
@@ -47,10 +67,36 @@ public class CreateChargeService implements CreateCharge {
                 .how("createCharge")
                 .info();
 
+        CreateChargeResult result =
+                new CreateChargeResult(
+                        saved.getId(),
+                        saved.getStatus().name(),
+                        saved.getAmount().amount(),
+                        saved.getCreatedAt(),
+                        false);
+
+        idempotencyPort.save(command.idempotencyKey(), requestHash, saved.getId(), result);
+
+        return result;
+    }
+
+    private CreateChargeResult replay(StoredIdempotency existing, String requestHash, String key) {
+        if (!existing.requestHash().equals(requestHash)) {
+            throw new IdempotencyConflictException(key);
+        }
+
+        CreateChargeResult previous = existing.result();
         return new CreateChargeResult(
-                saved.getId(),
-                saved.getStatus().name(),
-                saved.getAmount().amount(),
-                saved.getCreatedAt());
+                previous.id(), previous.status(), previous.amount(), previous.createdAt(), true);
+    }
+
+    private String hash(BigDecimal amount) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(amount.toPlainString().getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(bytes);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 indisponível", e);
+        }
     }
 }

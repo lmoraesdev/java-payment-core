@@ -4,4 +4,5 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-public record CreateChargeResult(UUID id, String status, BigDecimal amount, Instant createdAt) {}
+public record CreateChargeResult(
+        UUID id, String status, BigDecimal amount, Instant createdAt, boolean replayed) {}

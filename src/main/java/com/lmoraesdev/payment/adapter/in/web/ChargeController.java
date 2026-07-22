@@ -22,14 +22,17 @@ public class ChargeController implements ChargeControllerDoc {
     }
 
     @Override
-    public ResponseEntity<CreateChargeResponse> create(CreateChargeRequest request) {
-        CreateChargeResult result = createCharge.create(new CreateChargeCommand(request.amount()));
+    public ResponseEntity<CreateChargeResponse> create(
+            CreateChargeRequest request, String idempotencyKey) {
+        CreateChargeResult result =
+                createCharge.create(new CreateChargeCommand(request.amount(), idempotencyKey));
 
         CreateChargeResponse response =
                 new CreateChargeResponse(
                         result.id(), result.status(), result.amount(), result.createdAt());
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status).body(response);
     }
 
     @Override

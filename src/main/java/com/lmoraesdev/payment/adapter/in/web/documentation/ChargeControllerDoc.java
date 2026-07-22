@@ -4,6 +4,7 @@ import com.lmoraesdev.payment.adapter.in.web.CreateChargeRequest;
 import com.lmoraesdev.payment.adapter.in.web.CreateChargeResponse;
 import com.lmoraesdev.payment.adapter.in.web.GetChargeResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @Tag(name = "Charges", description = "Gerenciamento de cobranças Pix")
@@ -32,12 +34,18 @@ public interface ChargeControllerDoc {
                 description = "Cobrança criada com sucesso",
                 content = @Content(schema = @Schema(implementation = CreateChargeResponse.class))),
         @ApiResponse(
+                responseCode = "200",
+                description =
+                        "Idempotency-Key já utilizada com o mesmo corpo — cobrança existente retornada",
+                content = @Content(schema = @Schema(implementation = CreateChargeResponse.class))),
+        @ApiResponse(
                 responseCode = "400",
-                description = "Dados inválidos — Problem Details com erros por campo",
+                description = "Dados inválidos ou header Idempotency-Key ausente — Problem Details",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "422",
-                description = "Regra de negócio violada",
+                description =
+                        "Regra de negócio violada ou Idempotency-Key reutilizada com corpo diferente",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "500",
@@ -45,7 +53,11 @@ public interface ChargeControllerDoc {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     })
     @PostMapping
-    ResponseEntity<CreateChargeResponse> create(@Valid @RequestBody CreateChargeRequest request);
+    ResponseEntity<CreateChargeResponse> create(
+            @Valid @RequestBody CreateChargeRequest request,
+            @Parameter(description = "Chave de idempotência do cliente", required = true)
+                    @RequestHeader("Idempotency-Key")
+                    String idempotencyKey);
 
     @Operation(summary = "Consultar cobrança", description = "Busca uma cobrança Pix pelo id")
     @ApiResponses({
