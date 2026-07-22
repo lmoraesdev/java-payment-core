@@ -1,6 +1,7 @@
 package com.lmoraesdev.payment.adapter.in.web;
 
 import com.lmoraesdev.payment.config.logging.Logger5w1hBuilder;
+import com.lmoraesdev.payment.domain.exception.ChargeNotFoundException;
 import com.lmoraesdev.payment.domain.exception.DomainException;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,6 +30,16 @@ public class GlobalExceptionHandler {
                 .getFieldErrors()
                 .forEach(e -> errors.put(e.getField(), e.getDefaultMessage()));
         problem.setProperty("errors", errors);
+        addTraceId(problem);
+        return problem;
+    }
+
+    // 404 — recurso não encontrado. Esperado: NÃO loga.
+    @ExceptionHandler(ChargeNotFoundException.class)
+    public ProblemDetail handleChargeNotFound(ChargeNotFoundException ex) {
+        ProblemDetail problem =
+                ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Charge not found");
         addTraceId(problem);
         return problem;
     }
