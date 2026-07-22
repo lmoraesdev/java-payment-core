@@ -55,7 +55,15 @@ public class ProcessWebhookService implements ProcessWebhook {
 
         chargeRepository.save(charge);
 
-        String eventType = newStatus == ChargeStatus.PAID ? "ChargePaid" : "ChargeExpired";
+        String eventType =
+                switch (newStatus) {
+                    case PAID -> "ChargePaid";
+                    case EXPIRED -> "ChargeExpired";
+                    case CANCELLED -> "ChargeCancelled";
+                    default ->
+                            throw new IllegalStateException(
+                                    "status inesperado no outbox: " + newStatus);
+                };
 
         outboxEventPort.record(
                 "Charge",

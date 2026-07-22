@@ -82,6 +82,21 @@ class ProcessWebhookServiceTest {
     }
 
     @Test
+    @DisplayName(
+            "evento CANCELLED transiciona ACTIVE->CANCELLED e grava outbox como ChargeCancelled")
+    void transitionsChargeToCancelledAndRecordsOutboxAsChargeCancelled() {
+        Charge charge = ChargeTestData.aCharge().withStatus(ChargeStatus.ACTIVE).build();
+        when(webhookEventPort.existsByEventId("event-5")).thenReturn(false);
+        when(chargeRepository.findById(charge.getId())).thenReturn(Optional.of(charge));
+
+        service.process(new ProcessWebhookCommand("event-5", charge.getId(), "CANCELLED"));
+
+        assertThat(charge.getStatus()).isEqualTo(ChargeStatus.CANCELLED);
+        verify(outboxEventPort)
+                .record(eq("Charge"), eq(charge.getId().toString()), eq("ChargeCancelled"), any());
+    }
+
+    @Test
     @DisplayName("transição inválida (charge já PAID) lança InvalidStateTransitionException")
     void throwsInvalidStateTransitionExceptionForInvalidTransition() {
         Charge charge = ChargeTestData.aCharge().withStatus(ChargeStatus.PAID).build();
