@@ -3,12 +3,14 @@ package com.lmoraesdev.payment.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.lmoraesdev.payment.application.port.in.CreateChargeCommand;
 import com.lmoraesdev.payment.application.port.in.CreateChargeResult;
 import com.lmoraesdev.payment.application.port.out.ChargeRepository;
+import com.lmoraesdev.payment.application.port.out.OutboxEventPort;
 import com.lmoraesdev.payment.domain.exception.InvalidAmountException;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
 import java.math.BigDecimal;
@@ -27,6 +29,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CreateChargeServiceTest {
 
     @Mock ChargeRepository chargeRepository;
+
+    @Mock OutboxEventPort outboxEventPort;
 
     @InjectMocks CreateChargeService service;
 
@@ -58,6 +62,7 @@ class CreateChargeServiceTest {
         assertThat(result.amount()).isEqualByComparingTo(c.amount());
         assertThat(result.createdAt()).isNotNull();
         verify(chargeRepository).save(any());
+        verify(outboxEventPort).record(eq("Charge"), any(), eq("ChargeCreated"), any());
     }
 
     @Test
