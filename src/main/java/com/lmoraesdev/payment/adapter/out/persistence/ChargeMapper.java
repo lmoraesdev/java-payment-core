@@ -3,8 +3,12 @@ package com.lmoraesdev.payment.adapter.out.persistence;
 import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.Money;
 import java.math.BigDecimal;
+import java.time.Duration;
 
 final class ChargeMapper {
+
+    private static final Duration EXPIRATION = Duration.ofMinutes(30);
+
     private ChargeMapper() {}
 
     static ChargeJpaEntity toEntity(Charge charge) {
@@ -20,10 +24,12 @@ final class ChargeMapper {
 
     static Charge toDomain(ChargeJpaEntity entity) {
 
+        // ChargeJpaEntity ainda não persiste expiresAt; derivado até a coluna existir.
         return Charge.restore(
                 entity.getId(),
                 new Money(BigDecimal.valueOf(entity.getAmountCentavos(), 2)),
                 entity.getStatus(),
-                entity.getCreatedAt());
+                entity.getCreatedAt(),
+                entity.getCreatedAt().plus(EXPIRATION));
     }
 }

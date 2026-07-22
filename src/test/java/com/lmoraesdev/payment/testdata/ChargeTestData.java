@@ -4,6 +4,7 @@ import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
 import com.lmoraesdev.payment.domain.model.Money;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -33,6 +34,8 @@ public final class ChargeTestData {
     }
 
     public Charge build() {
-        return Charge.restore(UUID.randomUUID(), amount, status, Instant.now());
+        Instant now = Instant.now();
+        return Charge.restore(
+                UUID.randomUUID(), amount, status, now, now.plus(Duration.ofMinutes(30)));
     }
 }
