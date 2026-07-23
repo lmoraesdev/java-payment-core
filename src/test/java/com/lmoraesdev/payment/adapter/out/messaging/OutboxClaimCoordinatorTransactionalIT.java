@@ -3,7 +3,7 @@ package com.lmoraesdev.payment.adapter.out.messaging;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventEntity;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventJpaRepository;
@@ -46,13 +46,7 @@ class OutboxClaimCoordinatorTransactionalIT extends AbstractIntegrationTest {
                         OutboxEventEntity.pending(
                                 "Charge", "aggregate-rollback", "ChargeCreated", "{}", null));
 
-        doAnswer(
-                        invocation -> {
-                            invocation.callRealMethod();
-                            throw new RuntimeException("boom-mid-claim");
-                        })
-                .when(repository)
-                .saveAll(anyList());
+        doThrow(new RuntimeException("boom-mid-claim")).when(repository).saveAll(anyList());
 
         assertThatThrownBy(() -> coordinator.claimBatch())
                 .isInstanceOf(RuntimeException.class)

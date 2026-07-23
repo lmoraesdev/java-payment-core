@@ -10,10 +10,11 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.domain.Persistable;
 
 @Entity
 @Table(name = "charges")
-public class ChargeJpaEntity {
+public class ChargeJpaEntity implements Persistable<UUID> {
     @Id private UUID id;
 
     @Column(name = "amount_centavos", nullable = false)
@@ -35,8 +36,14 @@ public class ChargeJpaEntity {
 
     protected ChargeJpaEntity() {}
 
+    @Override
     public UUID getId() {
         return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return version == null;
     }
 
     public void setId(UUID id) {
