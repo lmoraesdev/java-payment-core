@@ -46,6 +46,9 @@ public class OutboxEventEntity {
     @Column(name = "correlation_id")
     private String correlationId;
 
+    @Column(name = "claimed_at")
+    private Instant claimedAt;
+
     protected OutboxEventEntity() {
         // JPA
     }
@@ -70,6 +73,7 @@ public class OutboxEventEntity {
 
     public void markInFlight() {
         this.status = OutboxStatus.IN_FLIGHT;
+        this.claimedAt = Instant.now();
     }
 
     public void markPublished() {
@@ -79,6 +83,7 @@ public class OutboxEventEntity {
 
     public void revertToPending() {
         this.status = OutboxStatus.PENDING;
+        this.claimedAt = null;
     }
 
     public UUID getId() {
@@ -107,5 +112,9 @@ public class OutboxEventEntity {
 
     public String getCorrelationId() {
         return correlationId;
+    }
+
+    public Instant getClaimedAt() {
+        return claimedAt;
     }
 }

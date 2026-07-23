@@ -1,7 +1,6 @@
 package com.lmoraesdev.payment.adapter.out.messaging;
 
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventEntity;
-import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventJpaRepository;
 import com.lmoraesdev.payment.config.logging.Logger5w1hBuilder;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -9,29 +8,27 @@ import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class OutboxRelay {
 
     private static final String TOPIC = "payments.charge-created";
 
-    private final OutboxEventJpaRepository repository;
+    private final OutboxClaimCoordinator outboxClaimCoordinator;
     private final KafkaTemplate<Object, Object> kafkaTemplate;
     private final Counter publishedCounter;
     private final Counter failedCounter;
     private final Timer publishLagTimer;
 
     public OutboxRelay(
-            OutboxEventJpaRepository repository,
+            OutboxClaimCoordinator outboxClaimCoordinator,
             KafkaTemplate<Object, Object> kafkaTemplate,
             MeterRegistry meterRegistry) {
-        this.repository = repository;
+        this.outboxClaimCoordinator = outboxClaimCoordinator;
         this.kafkaTemplate = kafkaTemplate;
         this.publishedCounter = meterRegistry.counter("outbox_events_published_total");
         this.failedCounter = meterRegistry.counter("outbox_events_failed_total");
@@ -40,30 +37,23 @@ public class OutboxRelay {
 
     @Scheduled(fixedDelay = 5000)
     public void publishPending() {
-        List<OutboxEventEntity> claimed = claimBatch();
+        List<OutboxEventEntity> claimed = outboxClaimCoordinator.claimBatch();
 
         for (OutboxEventEntity event : claimed) {
             publish(event);
         }
     }
 
-    @Transactional
-    public List<OutboxEventEntity> claimBatch() {
-        List<OutboxEventEntity> claimed = repository.findBatchForUpdateSkipLocked();
-        claimed.forEach(OutboxEventEntity::markInFlight);
-        return repository.saveAll(claimed);
-    }
-
     private void publish(OutboxEventEntity event) {
         try {
             kafkaTemplate.send(TOPIC, event.getAggregateId(), event.getPayload()).get();
-            markPublished(event.getId());
+            outboxClaimCoordinator.markPublished(event.getId());
             publishedCounter.increment();
             publishLagTimer.record(Duration.between(event.getCreatedAt(), Instant.now()));
         } catch (Exception e) {
             failedCounter.increment();
             logPublishFailure(event, e);
-            revertToPending(event.getId());
+            outboxClaimCoordinator.revertToPending(event.getId());
         }
     }
 
@@ -85,27 +75,5 @@ public class OutboxRelay {
                 MDC.remove("traceId");
             }
         }
-    }
-
-    @Transactional
-    public void markPublished(UUID eventId) {
-        repository
-                .findById(eventId)
-                .ifPresent(
-                        event -> {
-                            event.markPublished();
-                            repository.save(event);
-                        });
-    }
-
-    @Transactional
-    public void revertToPending(UUID eventId) {
-        repository
-                .findById(eventId)
-                .ifPresent(
-                        event -> {
-                            event.revertToPending();
-                            repository.save(event);
-                        });
     }
 }

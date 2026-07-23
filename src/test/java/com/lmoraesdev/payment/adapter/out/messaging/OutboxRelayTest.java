@@ -10,11 +10,8 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventEntity;
-import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventJpaRepository;
-import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +29,7 @@ import org.springframework.kafka.support.SendResult;
 @ExtendWith(MockitoExtension.class)
 class OutboxRelayTest {
 
-    @Mock OutboxEventJpaRepository repository;
+    @Mock OutboxClaimCoordinator outboxClaimCoordinator;
 
     @Mock KafkaTemplate<Object, Object> kafkaTemplate;
 
@@ -46,7 +43,7 @@ class OutboxRelayTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        relay = new OutboxRelay(repository, kafkaTemplate, meterRegistry);
+        relay = new OutboxRelay(outboxClaimCoordinator, kafkaTemplate, meterRegistry);
         logger = (Logger) LoggerFactory.getLogger(OutboxRelay.class);
         appender.start();
         logger.addAppender(appender);
@@ -58,60 +55,38 @@ class OutboxRelayTest {
     }
 
     @Test
-    @DisplayName("reivindica lote PENDING como IN_FLIGHT, publica e marca PUBLISHED")
+    @DisplayName("reivindica lote via OutboxClaimCoordinator, publica e marca PUBLISHED")
     void claimsPublishesAndMarksPublished() {
         OutboxEventEntity event =
                 OutboxEventEntity.pending("Charge", "charge-1", "ChargeCreated", "{}", null);
-        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
-        when(repository.saveAll(List.of(event))).thenReturn(List.of(event));
-        when(repository.findById(event.getId())).thenReturn(Optional.of(event));
+        when(outboxClaimCoordinator.claimBatch()).thenReturn(List.of(event));
         when(kafkaTemplate.send(any(String.class), any(), any()))
                 .thenReturn(CompletableFuture.completedFuture(mockSendResult()));
 
         relay.publishPending();
 
-        assertThat(event.getStatus()).isEqualTo(OutboxStatus.PUBLISHED);
-        verify(repository).saveAll(List.of(event));
-        verify(repository).save(event);
+        verify(outboxClaimCoordinator).markPublished(event.getId());
+        verify(outboxClaimCoordinator, never()).revertToPending(any());
         assertThat(meterRegistry.counter("outbox_events_published_total").count()).isEqualTo(1.0);
         assertThat(meterRegistry.counter("outbox_events_failed_total").count()).isEqualTo(0.0);
         assertThat(meterRegistry.timer("outbox_publish_lag").count()).isEqualTo(1L);
     }
 
     @Test
-    @DisplayName("claimBatch marca o lote reivindicado como IN_FLIGHT antes de publicar")
-    void claimBatchMarksEventsInFlight() {
-        OutboxEventEntity event =
-                OutboxEventEntity.pending("Charge", "charge-2", "ChargeCreated", "{}", null);
-        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
-        when(repository.saveAll(List.of(event)))
-                .thenAnswer(
-                        inv -> {
-                            assertThat(event.getStatus()).isEqualTo(OutboxStatus.IN_FLIGHT);
-                            return List.of(event);
-                        });
-
-        List<OutboxEventEntity> claimed = relay.claimBatch();
-
-        assertThat(claimed).containsExactly(event);
-    }
-
-    @Test
-    @DisplayName("falha ao publicar loga via Logger5w1hBuilder e reverte pra PENDING")
+    @DisplayName(
+            "falha ao publicar loga via Logger5w1hBuilder e reverte pra PENDING via coordinator")
     void logsFailureAndRevertsToPending() {
         OutboxEventEntity event =
                 OutboxEventEntity.pending(
                         "Charge", "charge-3", "ChargeCreated", "{}", "trace-original-request");
-        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
-        when(repository.saveAll(List.of(event))).thenReturn(List.of(event));
-        when(repository.findById(event.getId())).thenReturn(Optional.of(event));
+        when(outboxClaimCoordinator.claimBatch()).thenReturn(List.of(event));
         when(kafkaTemplate.send(any(String.class), any(), any()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka down")));
 
         relay.publishPending();
 
-        assertThat(event.getStatus()).isEqualTo(OutboxStatus.PENDING);
-        verify(repository).save(event);
+        verify(outboxClaimCoordinator).revertToPending(event.getId());
+        verify(outboxClaimCoordinator, never()).markPublished(any());
 
         assertThat(appender.list).hasSize(1);
         ILoggingEvent logged = appender.list.get(0);
@@ -129,9 +104,7 @@ class OutboxRelayTest {
     void doesNotTouchMdcWhenCorrelationIdIsAbsent() {
         OutboxEventEntity event =
                 OutboxEventEntity.pending("Charge", "charge-6", "ChargeCreated", "{}", null);
-        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
-        when(repository.saveAll(List.of(event))).thenReturn(List.of(event));
-        when(repository.findById(event.getId())).thenReturn(Optional.of(event));
+        when(outboxClaimCoordinator.claimBatch()).thenReturn(List.of(event));
         when(kafkaTemplate.send(any(String.class), any(), any()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka down")));
 
@@ -143,15 +116,15 @@ class OutboxRelayTest {
     }
 
     @Test
-    @DisplayName("lote vazio não publica nem salva nada")
+    @DisplayName("lote vazio não publica nem marca nada")
     void doesNothingWhenBatchIsEmpty() {
-        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of());
-        when(repository.saveAll(List.of())).thenReturn(List.of());
+        when(outboxClaimCoordinator.claimBatch()).thenReturn(List.of());
 
         relay.publishPending();
 
         verify(kafkaTemplate, never()).send(any(String.class), any(), any());
-        verify(repository, never()).save(any());
+        verify(outboxClaimCoordinator, never()).markPublished(any());
+        verify(outboxClaimCoordinator, never()).revertToPending(any());
     }
 
     @SuppressWarnings("unchecked")
