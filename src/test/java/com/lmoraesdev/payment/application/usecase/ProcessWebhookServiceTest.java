@@ -17,12 +17,13 @@ import com.lmoraesdev.payment.domain.exception.InvalidStateTransitionException;
 import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
 import com.lmoraesdev.payment.testdata.ChargeTestData;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -36,7 +37,17 @@ class ProcessWebhookServiceTest {
 
     @Mock WebhookEventPort webhookEventPort;
 
-    @InjectMocks ProcessWebhookService service;
+    SimpleMeterRegistry meterRegistry;
+
+    ProcessWebhookService service;
+
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        service =
+                new ProcessWebhookService(
+                        chargeRepository, outboxEventPort, webhookEventPort, meterRegistry);
+    }
 
     @Test
     @DisplayName("evento novo transiciona ACTIVE->PAID, grava outbox e registra dedup")
@@ -52,6 +63,7 @@ class ProcessWebhookServiceTest {
         verify(outboxEventPort)
                 .record(eq("Charge"), eq(charge.getId().toString()), eq("ChargePaid"), any());
         verify(webhookEventPort).save("event-1", charge.getId());
+        assertThat(meterRegistry.counter("webhooks_processed_total").count()).isEqualTo(1.0);
     }
 
     @Test
@@ -65,6 +77,7 @@ class ProcessWebhookServiceTest {
         verify(chargeRepository, never()).save(any());
         verify(outboxEventPort, never()).record(any(), any(), any(), any());
         verify(webhookEventPort, never()).save(any(), any());
+        assertThat(meterRegistry.counter("webhooks_processed_total").count()).isEqualTo(1.0);
     }
 
     @Test

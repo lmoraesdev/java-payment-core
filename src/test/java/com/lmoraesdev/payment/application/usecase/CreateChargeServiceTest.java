@@ -17,6 +17,7 @@ import com.lmoraesdev.payment.application.port.out.OutboxEventPort;
 import com.lmoraesdev.payment.domain.exception.IdempotencyConflictException;
 import com.lmoraesdev.payment.domain.exception.InvalidAmountException;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -26,12 +27,12 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -45,7 +46,17 @@ class CreateChargeServiceTest {
 
     @Mock IdempotencyPort idempotencyPort;
 
-    @InjectMocks CreateChargeService service;
+    SimpleMeterRegistry meterRegistry;
+
+    CreateChargeService service;
+
+    @BeforeEach
+    void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        service =
+                new CreateChargeService(
+                        chargeRepository, outboxEventPort, idempotencyPort, meterRegistry);
+    }
 
     record Case(String name, String amount) {
         @Override
@@ -89,6 +100,7 @@ class CreateChargeServiceTest {
         verify(chargeRepository).save(any());
         verify(outboxEventPort).record(eq("Charge"), any(), eq("ChargeCreated"), any());
         verify(idempotencyPort).save(eq("key-" + c.name()), any(), any(), eq(result));
+        assertThat(meterRegistry.counter("charges_created_total").count()).isEqualTo(1.0);
     }
 
     @Test
@@ -131,6 +143,7 @@ class CreateChargeServiceTest {
         assertThat(result.replayed()).isTrue();
         verify(chargeRepository, never()).save(any());
         verify(outboxEventPort, never()).record(any(), any(), any(), any());
+        assertThat(meterRegistry.counter("charges_created_total").count()).isEqualTo(0.0);
     }
 
     @Test

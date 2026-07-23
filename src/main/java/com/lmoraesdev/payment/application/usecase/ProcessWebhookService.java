@@ -10,6 +10,8 @@ import com.lmoraesdev.payment.domain.event.ChargeStatusChangedEvent;
 import com.lmoraesdev.payment.domain.exception.ChargeNotFoundException;
 import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,19 +21,24 @@ public class ProcessWebhookService implements ProcessWebhook {
     private final ChargeRepository chargeRepository;
     private final OutboxEventPort outboxEventPort;
     private final WebhookEventPort webhookEventPort;
+    private final Counter webhooksProcessedCounter;
 
     public ProcessWebhookService(
             ChargeRepository chargeRepository,
             OutboxEventPort outboxEventPort,
-            WebhookEventPort webhookEventPort) {
+            WebhookEventPort webhookEventPort,
+            MeterRegistry meterRegistry) {
         this.chargeRepository = chargeRepository;
         this.outboxEventPort = outboxEventPort;
         this.webhookEventPort = webhookEventPort;
+        this.webhooksProcessedCounter = meterRegistry.counter("webhooks_processed_total");
     }
 
     @Override
     @Transactional
     public void process(ProcessWebhookCommand command) {
+        webhooksProcessedCounter.increment();
+
         if (webhookEventPort.existsByEventId(command.eventId())) {
             Logger5w1hBuilder.create(ProcessWebhookService.class)
                     .where("ProcessWebhookService")

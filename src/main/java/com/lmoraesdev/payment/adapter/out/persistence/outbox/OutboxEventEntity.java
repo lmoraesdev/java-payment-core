@@ -92,4 +92,8 @@ public class OutboxEventEntity {
     public OutboxStatus getStatus() {
         return status;
     }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

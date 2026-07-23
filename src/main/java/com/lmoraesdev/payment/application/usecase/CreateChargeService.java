@@ -12,6 +12,8 @@ import com.lmoraesdev.payment.domain.event.ChargeCreatedEvent;
 import com.lmoraesdev.payment.domain.exception.IdempotencyConflictException;
 import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.Money;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -26,14 +28,17 @@ public class CreateChargeService implements CreateCharge {
     private final ChargeRepository chargeRepository;
     private final OutboxEventPort outboxEventPort;
     private final IdempotencyPort idempotencyPort;
+    private final Counter chargesCreatedCounter;
 
     public CreateChargeService(
             ChargeRepository chargeRepository,
             OutboxEventPort outboxEventPort,
-            IdempotencyPort idempotencyPort) {
+            IdempotencyPort idempotencyPort,
+            MeterRegistry meterRegistry) {
         this.chargeRepository = chargeRepository;
         this.outboxEventPort = outboxEventPort;
         this.idempotencyPort = idempotencyPort;
+        this.chargesCreatedCounter = meterRegistry.counter("charges_created_total");
     }
 
     @Override
@@ -76,6 +81,7 @@ public class CreateChargeService implements CreateCharge {
                         false);
 
         idempotencyPort.save(command.idempotencyKey(), requestHash, saved.getId(), result);
+        chargesCreatedCounter.increment();
 
         return result;
     }

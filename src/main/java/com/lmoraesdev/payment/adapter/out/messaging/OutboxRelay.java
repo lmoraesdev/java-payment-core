@@ -3,6 +3,11 @@ package com.lmoraesdev.payment.adapter.out.messaging;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventEntity;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventJpaRepository;
 import com.lmoraesdev.payment.config.logging.Logger5w1hBuilder;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -17,11 +22,19 @@ public class OutboxRelay {
 
     private final OutboxEventJpaRepository repository;
     private final KafkaTemplate<Object, Object> kafkaTemplate;
+    private final Counter publishedCounter;
+    private final Counter failedCounter;
+    private final Timer publishLagTimer;
 
     public OutboxRelay(
-            OutboxEventJpaRepository repository, KafkaTemplate<Object, Object> kafkaTemplate) {
+            OutboxEventJpaRepository repository,
+            KafkaTemplate<Object, Object> kafkaTemplate,
+            MeterRegistry meterRegistry) {
         this.repository = repository;
         this.kafkaTemplate = kafkaTemplate;
+        this.publishedCounter = meterRegistry.counter("outbox_events_published_total");
+        this.failedCounter = meterRegistry.counter("outbox_events_failed_total");
+        this.publishLagTimer = meterRegistry.timer("outbox_publish_lag");
     }
 
     @Scheduled(fixedDelay = 5000)
@@ -44,7 +57,10 @@ public class OutboxRelay {
         try {
             kafkaTemplate.send(TOPIC, event.getAggregateId(), event.getPayload()).get();
             markPublished(event.getId());
+            publishedCounter.increment();
+            publishLagTimer.record(Duration.between(event.getCreatedAt(), Instant.now()));
         } catch (Exception e) {
+            failedCounter.increment();
             Logger5w1hBuilder.create(OutboxRelay.class)
                     .where("OutboxRelay")
                     .what("outbox_publish_failed")

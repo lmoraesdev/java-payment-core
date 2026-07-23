@@ -12,6 +12,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventEntity;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventJpaRepository;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -20,7 +21,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
@@ -35,13 +35,17 @@ class OutboxRelayTest {
 
     @Mock KafkaTemplate<Object, Object> kafkaTemplate;
 
-    @InjectMocks OutboxRelay relay;
+    SimpleMeterRegistry meterRegistry;
+
+    OutboxRelay relay;
 
     private final ListAppender<ILoggingEvent> appender = new ListAppender<>();
     private Logger logger;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        relay = new OutboxRelay(repository, kafkaTemplate, meterRegistry);
         logger = (Logger) LoggerFactory.getLogger(OutboxRelay.class);
         appender.start();
         logger.addAppender(appender);
@@ -68,6 +72,9 @@ class OutboxRelayTest {
         assertThat(event.getStatus()).isEqualTo(OutboxStatus.PUBLISHED);
         verify(repository).saveAll(List.of(event));
         verify(repository).save(event);
+        assertThat(meterRegistry.counter("outbox_events_published_total").count()).isEqualTo(1.0);
+        assertThat(meterRegistry.counter("outbox_events_failed_total").count()).isEqualTo(0.0);
+        assertThat(meterRegistry.timer("outbox_publish_lag").count()).isEqualTo(1L);
     }
 
     @Test
@@ -109,6 +116,8 @@ class OutboxRelayTest {
         assertThat(logged.getLevel().toString()).isEqualTo("ERROR");
         assertThat(logged.getFormattedMessage()).startsWith("outbox_publish_failed:");
         assertThat(logged.getThrowableProxy().getMessage()).contains("kafka down");
+        assertThat(meterRegistry.counter("outbox_events_failed_total").count()).isEqualTo(1.0);
+        assertThat(meterRegistry.counter("outbox_events_published_total").count()).isEqualTo(0.0);
     }
 
     @Test
