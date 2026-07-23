@@ -32,7 +32,23 @@ class OutboxEventRepositoryIT extends AbstractIntegrationTest {
                 .containsOnly(OutboxStatus.PENDING);
     }
 
+    @Test
+    @DisplayName("save e findBatchForUpdateSkipLocked preservam o correlationId")
+    void findBatchForUpdateSkipLockedPreservesCorrelationId() {
+        OutboxEventEntity saved =
+                repository.save(
+                        OutboxEventEntity.pending(
+                                "Charge", "aggregate-4", "ChargeCreated", "{}", "trace-abc"));
+
+        List<OutboxEventEntity> batch = repository.findBatchForUpdateSkipLocked();
+
+        assertThat(batch)
+                .filteredOn(event -> event.getId().equals(saved.getId()))
+                .extracting(OutboxEventEntity::getCorrelationId)
+                .containsExactly("trace-abc");
+    }
+
     private OutboxEventEntity pending(String aggregateId) {
-        return OutboxEventEntity.pending("Charge", aggregateId, "ChargeCreated", "{}");
+        return OutboxEventEntity.pending("Charge", aggregateId, "ChargeCreated", "{}", null);
     }
 }

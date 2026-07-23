@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.MDC;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -61,6 +62,17 @@ public class OutboxRelay {
             publishLagTimer.record(Duration.between(event.getCreatedAt(), Instant.now()));
         } catch (Exception e) {
             failedCounter.increment();
+            logPublishFailure(event, e);
+            revertToPending(event.getId());
+        }
+    }
+
+    private void logPublishFailure(OutboxEventEntity event, Exception e) {
+        String correlationId = event.getCorrelationId();
+        if (correlationId != null) {
+            MDC.put("traceId", correlationId);
+        }
+        try {
             Logger5w1hBuilder.create(OutboxRelay.class)
                     .where("OutboxRelay")
                     .what("outbox_publish_failed")
@@ -68,7 +80,10 @@ public class OutboxRelay {
                     .who("system")
                     .how("publishPending")
                     .error(e);
-            revertToPending(event.getId());
+        } finally {
+            if (correlationId != null) {
+                MDC.remove("traceId");
+            }
         }
     }
 

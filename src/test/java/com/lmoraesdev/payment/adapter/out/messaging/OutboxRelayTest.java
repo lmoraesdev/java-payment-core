@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
@@ -60,7 +61,7 @@ class OutboxRelayTest {
     @DisplayName("reivindica lote PENDING como IN_FLIGHT, publica e marca PUBLISHED")
     void claimsPublishesAndMarksPublished() {
         OutboxEventEntity event =
-                OutboxEventEntity.pending("Charge", "charge-1", "ChargeCreated", "{}");
+                OutboxEventEntity.pending("Charge", "charge-1", "ChargeCreated", "{}", null);
         when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
         when(repository.saveAll(List.of(event))).thenReturn(List.of(event));
         when(repository.findById(event.getId())).thenReturn(Optional.of(event));
@@ -81,7 +82,7 @@ class OutboxRelayTest {
     @DisplayName("claimBatch marca o lote reivindicado como IN_FLIGHT antes de publicar")
     void claimBatchMarksEventsInFlight() {
         OutboxEventEntity event =
-                OutboxEventEntity.pending("Charge", "charge-2", "ChargeCreated", "{}");
+                OutboxEventEntity.pending("Charge", "charge-2", "ChargeCreated", "{}", null);
         when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
         when(repository.saveAll(List.of(event)))
                 .thenAnswer(
@@ -99,7 +100,8 @@ class OutboxRelayTest {
     @DisplayName("falha ao publicar loga via Logger5w1hBuilder e reverte pra PENDING")
     void logsFailureAndRevertsToPending() {
         OutboxEventEntity event =
-                OutboxEventEntity.pending("Charge", "charge-3", "ChargeCreated", "{}");
+                OutboxEventEntity.pending(
+                        "Charge", "charge-3", "ChargeCreated", "{}", "trace-original-request");
         when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
         when(repository.saveAll(List.of(event))).thenReturn(List.of(event));
         when(repository.findById(event.getId())).thenReturn(Optional.of(event));
@@ -118,6 +120,26 @@ class OutboxRelayTest {
         assertThat(logged.getThrowableProxy().getMessage()).contains("kafka down");
         assertThat(meterRegistry.counter("outbox_events_failed_total").count()).isEqualTo(1.0);
         assertThat(meterRegistry.counter("outbox_events_published_total").count()).isEqualTo(0.0);
+        assertThat(logged.getMDCPropertyMap()).containsEntry("traceId", "trace-original-request");
+        assertThat(MDC.get("traceId")).isNull();
+    }
+
+    @Test
+    @DisplayName("evento sem correlationId não mexe no MDC ao logar a falha")
+    void doesNotTouchMdcWhenCorrelationIdIsAbsent() {
+        OutboxEventEntity event =
+                OutboxEventEntity.pending("Charge", "charge-6", "ChargeCreated", "{}", null);
+        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
+        when(repository.saveAll(List.of(event))).thenReturn(List.of(event));
+        when(repository.findById(event.getId())).thenReturn(Optional.of(event));
+        when(kafkaTemplate.send(any(String.class), any(), any()))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka down")));
+
+        relay.publishPending();
+
+        assertThat(appender.list).hasSize(1);
+        assertThat(appender.list.get(0).getMDCPropertyMap()).doesNotContainKey("traceId");
+        assertThat(MDC.get("traceId")).isNull();
     }
 
     @Test
