@@ -60,9 +60,17 @@ public class OutboxEventEntity {
         return event;
     }
 
+    public void markInFlight() {
+        this.status = OutboxStatus.IN_FLIGHT;
+    }
+
     public void markPublished() {
         this.status = OutboxStatus.PUBLISHED;
         this.publishedAt = Instant.now();
+    }
+
+    public void revertToPending() {
+        this.status = OutboxStatus.PENDING;
     }
 
     public UUID getId() {

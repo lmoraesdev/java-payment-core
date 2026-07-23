@@ -53,12 +53,12 @@ class OutboxRelayTest {
     }
 
     @Test
-    @DisplayName("publica evento pendente com sucesso e marca como PUBLISHED")
-    void publishesPendingEventSuccessfully() {
+    @DisplayName("reivindica lote PENDING como IN_FLIGHT, publica e marca PUBLISHED")
+    void claimsPublishesAndMarksPublished() {
         OutboxEventEntity event =
                 OutboxEventEntity.pending("Charge", "charge-1", "ChargeCreated", "{}");
-        when(repository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING))
-                .thenReturn(List.of(event));
+        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
+        when(repository.saveAll(List.of(event))).thenReturn(List.of(event));
         when(repository.findById(event.getId())).thenReturn(Optional.of(event));
         when(kafkaTemplate.send(any(String.class), any(), any()))
                 .thenReturn(CompletableFuture.completedFuture(mockSendResult()));
@@ -66,30 +66,61 @@ class OutboxRelayTest {
         relay.publishPending();
 
         assertThat(event.getStatus()).isEqualTo(OutboxStatus.PUBLISHED);
+        verify(repository).saveAll(List.of(event));
         verify(repository).save(event);
     }
 
     @Test
-    @DisplayName(
-            "falha ao publicar loga via Logger5w1hBuilder com what=outbox_publish_failed e não marca published")
-    void logsFailureViaLogger5w1hBuilder() {
+    @DisplayName("claimBatch marca o lote reivindicado como IN_FLIGHT antes de publicar")
+    void claimBatchMarksEventsInFlight() {
         OutboxEventEntity event =
                 OutboxEventEntity.pending("Charge", "charge-2", "ChargeCreated", "{}");
-        when(repository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING))
-                .thenReturn(List.of(event));
+        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
+        when(repository.saveAll(List.of(event)))
+                .thenAnswer(
+                        inv -> {
+                            assertThat(event.getStatus()).isEqualTo(OutboxStatus.IN_FLIGHT);
+                            return List.of(event);
+                        });
+
+        List<OutboxEventEntity> claimed = relay.claimBatch();
+
+        assertThat(claimed).containsExactly(event);
+    }
+
+    @Test
+    @DisplayName("falha ao publicar loga via Logger5w1hBuilder e reverte pra PENDING")
+    void logsFailureAndRevertsToPending() {
+        OutboxEventEntity event =
+                OutboxEventEntity.pending("Charge", "charge-3", "ChargeCreated", "{}");
+        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of(event));
+        when(repository.saveAll(List.of(event))).thenReturn(List.of(event));
+        when(repository.findById(event.getId())).thenReturn(Optional.of(event));
         when(kafkaTemplate.send(any(String.class), any(), any()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka down")));
 
         relay.publishPending();
 
         assertThat(event.getStatus()).isEqualTo(OutboxStatus.PENDING);
-        verify(repository, never()).save(any());
+        verify(repository).save(event);
 
         assertThat(appender.list).hasSize(1);
         ILoggingEvent logged = appender.list.get(0);
         assertThat(logged.getLevel().toString()).isEqualTo("ERROR");
         assertThat(logged.getFormattedMessage()).startsWith("outbox_publish_failed:");
         assertThat(logged.getThrowableProxy().getMessage()).contains("kafka down");
+    }
+
+    @Test
+    @DisplayName("lote vazio não publica nem salva nada")
+    void doesNothingWhenBatchIsEmpty() {
+        when(repository.findBatchForUpdateSkipLocked()).thenReturn(List.of());
+        when(repository.saveAll(List.of())).thenReturn(List.of());
+
+        relay.publishPending();
+
+        verify(kafkaTemplate, never()).send(any(String.class), any(), any());
+        verify(repository, never()).save(any());
     }
 
     @SuppressWarnings("unchecked")

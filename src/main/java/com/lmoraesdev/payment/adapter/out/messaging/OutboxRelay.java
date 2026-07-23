@@ -2,7 +2,6 @@ package com.lmoraesdev.payment.adapter.out.messaging;
 
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventEntity;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventJpaRepository;
-import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxStatus;
 import com.lmoraesdev.payment.config.logging.Logger5w1hBuilder;
 import java.util.List;
 import java.util.UUID;
@@ -27,12 +26,18 @@ public class OutboxRelay {
 
     @Scheduled(fixedDelay = 5000)
     public void publishPending() {
-        List<OutboxEventEntity> pending =
-                repository.findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus.PENDING);
+        List<OutboxEventEntity> claimed = claimBatch();
 
-        for (OutboxEventEntity event : pending) {
+        for (OutboxEventEntity event : claimed) {
             publish(event);
         }
+    }
+
+    @Transactional
+    public List<OutboxEventEntity> claimBatch() {
+        List<OutboxEventEntity> claimed = repository.findBatchForUpdateSkipLocked();
+        claimed.forEach(OutboxEventEntity::markInFlight);
+        return repository.saveAll(claimed);
     }
 
     private void publish(OutboxEventEntity event) {
@@ -47,6 +52,7 @@ public class OutboxRelay {
                     .who("system")
                     .how("publishPending")
                     .error(e);
+            revertToPending(event.getId());
         }
     }
 
@@ -57,6 +63,17 @@ public class OutboxRelay {
                 .ifPresent(
                         event -> {
                             event.markPublished();
+                            repository.save(event);
+                        });
+    }
+
+    @Transactional
+    public void revertToPending(UUID eventId) {
+        repository
+                .findById(eventId)
+                .ifPresent(
+                        event -> {
+                            event.revertToPending();
                             repository.save(event);
                         });
     }
