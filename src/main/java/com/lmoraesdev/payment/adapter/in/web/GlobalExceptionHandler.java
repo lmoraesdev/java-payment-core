@@ -1,6 +1,7 @@
 package com.lmoraesdev.payment.adapter.in.web;
 
 import com.lmoraesdev.payment.config.logging.Logger5w1hBuilder;
+import com.lmoraesdev.payment.domain.exception.ChargeNotFoundException;
 import com.lmoraesdev.payment.domain.exception.DomainException;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +11,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -29,6 +31,28 @@ public class GlobalExceptionHandler {
                 .getFieldErrors()
                 .forEach(e -> errors.put(e.getField(), e.getDefaultMessage()));
         problem.setProperty("errors", errors);
+        addTraceId(problem);
+        return problem;
+    }
+
+    // 400 — header obrigatório ausente. Erro esperado do cliente: NÃO loga.
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ProblemDetail handleMissingHeader(MissingRequestHeaderException ex) {
+        ProblemDetail problem =
+                ProblemDetail.forStatusAndDetail(
+                        HttpStatus.BAD_REQUEST,
+                        "Header obrigatório ausente: %s".formatted(ex.getHeaderName()));
+        problem.setTitle("Missing required header");
+        addTraceId(problem);
+        return problem;
+    }
+
+    // 404 — recurso não encontrado. Esperado: NÃO loga.
+    @ExceptionHandler(ChargeNotFoundException.class)
+    public ProblemDetail handleChargeNotFound(ChargeNotFoundException ex) {
+        ProblemDetail problem =
+                ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Charge not found");
         addTraceId(problem);
         return problem;
     }

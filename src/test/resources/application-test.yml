@@ -1,11 +1,13 @@
 spring:
+  main:
+    banner-mode: off
   mvc:
     problemdetails:
       enabled: true
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -22,3 +24,16 @@ management:
   tracing:
     export:
       enabled: false
+
+logging:
+  level:
+    root: WARN
+    com.lmoraesdev.payment: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
+    org.hibernate.orm.jdbc.extract: WARN
+    org.hibernate: WARN
+    org.testcontainers: WARN
+    com.zaxxer.hikari: WARN
+    org.springframework: WARN
+    org.flywaydb: INFO

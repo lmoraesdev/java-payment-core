@@ -3,8 +3,19 @@ package com.lmoraesdev.payment.adapter.out.persistence.outbox;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 public interface OutboxEventJpaRepository extends JpaRepository<OutboxEventEntity, UUID> {
 
-    List<OutboxEventEntity> findTop50ByStatusOrderByCreatedAtAsc(OutboxStatus status);
+    @Query(
+            value =
+                    """
+                    select * from outbox_events
+                    where status = 'PENDING'
+                    order by created_at asc
+                    limit 50
+                    for update skip locked
+                    """,
+            nativeQuery = true)
+    List<OutboxEventEntity> findBatchForUpdateSkipLocked();
 }

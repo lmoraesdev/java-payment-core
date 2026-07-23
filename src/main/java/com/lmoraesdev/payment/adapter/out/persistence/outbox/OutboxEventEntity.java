@@ -43,12 +43,19 @@ public class OutboxEventEntity {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @Column(name = "correlation_id")
+    private String correlationId;
+
     protected OutboxEventEntity() {
         // JPA
     }
 
     public static OutboxEventEntity pending(
-            String aggregateType, String aggregateId, String eventType, String payloadJson) {
+            String aggregateType,
+            String aggregateId,
+            String eventType,
+            String payloadJson,
+            String correlationId) {
         OutboxEventEntity event = new OutboxEventEntity();
         event.id = UUID.randomUUID();
         event.aggregateType = aggregateType;
@@ -57,12 +64,21 @@ public class OutboxEventEntity {
         event.payload = payloadJson;
         event.status = OutboxStatus.PENDING;
         event.createdAt = Instant.now();
+        event.correlationId = correlationId;
         return event;
+    }
+
+    public void markInFlight() {
+        this.status = OutboxStatus.IN_FLIGHT;
     }
 
     public void markPublished() {
         this.status = OutboxStatus.PUBLISHED;
         this.publishedAt = Instant.now();
+    }
+
+    public void revertToPending() {
+        this.status = OutboxStatus.PENDING;
     }
 
     public UUID getId() {
@@ -83,5 +99,13 @@ public class OutboxEventEntity {
 
     public OutboxStatus getStatus() {
         return status;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
     }
 }

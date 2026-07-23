@@ -17,19 +17,19 @@ public class Logger5w1h {
     }
 
     public void info(Log5w1h data) {
-        withFields(logger.atInfo(), data).log();
+        withFields(logger.atInfo(), data).log(message(data));
     }
 
     public void debug(Log5w1h data) {
-        withFields(logger.atDebug(), data).log();
+        withFields(logger.atDebug(), data).log(message(data));
     }
 
     public void warn(Log5w1h data) {
-        withFields(logger.atWarn(), data).log();
+        withFields(logger.atWarn(), data).log(message(data));
     }
 
     public void error(Log5w1h data, Throwable cause) {
-        withFields(logger.atError(), data).setCause(cause).log();
+        withFields(logger.atError(), data).setCause(cause).log(message(data));
     }
 
     private LoggingEventBuilder withFields(LoggingEventBuilder builder, Log5w1h data) {
@@ -38,5 +38,9 @@ public class Logger5w1h {
                 .addKeyValue("who", data.who())
                 .addKeyValue("what", data.what())
                 .addKeyValue("how", data.how());
+    }
+
+    private String message(Log5w1h data) {
+        return "%s: %s".formatted(data.what(), data.why());
     }
 }
