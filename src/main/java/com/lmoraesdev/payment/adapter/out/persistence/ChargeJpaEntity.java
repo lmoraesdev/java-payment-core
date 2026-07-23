@@ -25,6 +25,9 @@ public class ChargeJpaEntity {
     @Column(nullable = false)
     private Instant createdAt;
 
+    @Column(name = "expires_at", nullable = false)
+    private Instant expiresAt;
+
     protected ChargeJpaEntity() {}
 
     public UUID getId() {
@@ -57,5 +60,13 @@ public class ChargeJpaEntity {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
     }
 }

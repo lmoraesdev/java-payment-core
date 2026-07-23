@@ -2,6 +2,9 @@ package com.lmoraesdev.payment.adapter.out.persistence;
 
 import com.lmoraesdev.payment.application.port.out.ChargeRepository;
 import com.lmoraesdev.payment.domain.model.Charge;
+import com.lmoraesdev.payment.domain.model.ChargeStatus;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -26,5 +29,14 @@ public class ChargeRepositoryAdapter implements ChargeRepository {
     @Override
     public Optional<Charge> findById(UUID id) {
         return repository.findById(id).map(ChargeMapper::toDomain);
+    }
+
+    @Override
+    public List<Charge> findExpiredActive(Instant now) {
+        return repository
+                .findTop50ByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(ChargeStatus.ACTIVE, now)
+                .stream()
+                .map(ChargeMapper::toDomain)
+                .toList();
     }
 }
