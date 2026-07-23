@@ -3,6 +3,7 @@ package com.lmoraesdev.payment.adapter.out.persistence.outbox;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lmoraesdev.payment.application.port.out.OutboxEventPort;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -19,7 +20,8 @@ public class OutboxEventAdapter implements OutboxEventPort {
     @Override
     public void record(String aggregateType, String aggregateId, String eventType, Object payload) {
         OutboxEventEntity event =
-                OutboxEventEntity.pending(aggregateType, aggregateId, eventType, toJson(payload));
+                OutboxEventEntity.pending(
+                        aggregateType, aggregateId, eventType, toJson(payload), MDC.get("traceId"));
         repository.save(event);
     }
 
