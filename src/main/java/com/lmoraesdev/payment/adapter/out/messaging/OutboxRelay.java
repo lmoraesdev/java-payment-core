@@ -3,10 +3,9 @@ package com.lmoraesdev.payment.adapter.out.messaging;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventEntity;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxEventJpaRepository;
 import com.lmoraesdev.payment.adapter.out.persistence.outbox.OutboxStatus;
+import com.lmoraesdev.payment.config.logging.Logger5w1hBuilder;
 import java.util.List;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -15,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class OutboxRelay {
 
-    private static final Logger LOG = LoggerFactory.getLogger(OutboxRelay.class);
     private static final String TOPIC = "payments.charge-created";
 
     private final OutboxEventJpaRepository repository;
@@ -42,7 +40,13 @@ public class OutboxRelay {
             kafkaTemplate.send(TOPIC, event.getAggregateId(), event.getPayload()).get();
             markPublished(event.getId());
         } catch (Exception e) {
-            LOG.warn("failed to publish outbox event {}, will retry next poll", event.getId(), e);
+            Logger5w1hBuilder.create(OutboxRelay.class)
+                    .where("OutboxRelay")
+                    .what("outbox_publish_failed")
+                    .why("kafka send failed for event " + event.getId() + ", will retry next poll")
+                    .who("system")
+                    .how("publishPending")
+                    .error(e);
         }
     }
 
