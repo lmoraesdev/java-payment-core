@@ -16,6 +16,7 @@ final class ChargeMapper {
         entity.setStatus(charge.getStatus());
         entity.setCreatedAt(charge.getCreatedAt());
         entity.setExpiresAt(charge.getExpiresAt());
+        entity.setVersion(charge.getVersion());
 
         return entity;
     }
@@ -26,6 +27,7 @@ final class ChargeMapper {
                 new Money(BigDecimal.valueOf(entity.getAmountCentavos(), 2)),
                 entity.getStatus(),
                 entity.getCreatedAt(),
-                entity.getExpiresAt());
+                entity.getExpiresAt(),
+                entity.getVersion());
     }
 }

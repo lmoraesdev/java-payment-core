@@ -7,12 +7,14 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.domain.Persistable;
 
 @Entity
 @Table(name = "charges")
-public class ChargeJpaEntity {
+public class ChargeJpaEntity implements Persistable<UUID> {
     @Id private UUID id;
 
     @Column(name = "amount_centavos", nullable = false)
@@ -28,10 +30,20 @@ public class ChargeJpaEntity {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     protected ChargeJpaEntity() {}
 
+    @Override
     public UUID getId() {
         return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return version == null;
     }
 
     public void setId(UUID id) {
@@ -68,5 +80,13 @@ public class ChargeJpaEntity {
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }

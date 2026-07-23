@@ -26,7 +26,7 @@ class ChargeRepositoryIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("save e findById preservam todos os campos")
     void roundTripPreservesAllFields() {
-        Charge charge = ChargeTestData.aCharge().build();
+        Charge charge = Charge.create(ChargeTestData.money("10.50"));
 
         Charge saved = chargeRepository.save(charge);
         Optional<Charge> found = chargeRepository.findById(saved.getId());
@@ -37,6 +37,7 @@ class ChargeRepositoryIT extends AbstractIntegrationTest {
         assertThat(result.getAmount().amount()).isEqualByComparingTo(charge.getAmount().amount());
         assertThat(result.getStatus()).isEqualTo(charge.getStatus());
         assertThat(result.getCreatedAt()).isEqualTo(charge.getCreatedAt());
+        assertThat(result.getVersion()).isEqualTo(0L);
     }
 
     @Test
@@ -58,10 +59,11 @@ class ChargeRepositoryIT extends AbstractIntegrationTest {
                         ChargeTestData.money("10.00"),
                         ChargeStatus.ACTIVE,
                         createdAt,
-                        overdueExpiresAt);
+                        overdueExpiresAt,
+                        null);
         chargeRepository.save(overdue);
 
-        Charge notYetExpired = ChargeTestData.aCharge().withStatus(ChargeStatus.ACTIVE).build();
+        Charge notYetExpired = Charge.create(ChargeTestData.money("10.00"));
         chargeRepository.save(notYetExpired);
 
         List<Charge> result = chargeRepository.findExpiredActive(Instant.now());

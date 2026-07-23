@@ -2,7 +2,7 @@
 
 Core de pagamentos Pix em Java — Hexagonal Architecture, observabilidade e pipeline CI/CD. EPIC-001 (criar cobrança) implementado e testado.
 
-[![CI](https://github.com/lmoraesdev/java-payment-hexagonal/actions/workflows/ci.yml/badge.svg)](https://github.com/lmoraesdev/java-payment-hexagonal/actions/workflows/ci.yml)
+[![CI](https://github.com/lmoraesdev/java-payment-core/actions/workflows/ci.yml/badge.svg)](https://github.com/lmoraesdev/java-payment-core/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-blue?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.3-6DB33F?logo=springboot&logoColor=white)
 

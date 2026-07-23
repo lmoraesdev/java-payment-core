@@ -22,14 +22,21 @@ public class Charge {
     private ChargeStatus status;
     private final Instant createdAt;
     private final Instant expiresAt;
+    private final Long version;
 
     private Charge(
-            UUID id, Money amount, ChargeStatus status, Instant createdAt, Instant expiresAt) {
+            UUID id,
+            Money amount,
+            ChargeStatus status,
+            Instant createdAt,
+            Instant expiresAt,
+            Long version) {
         this.id = id;
         this.amount = amount;
         this.status = status;
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
+        this.version = version;
     }
 
     public static Charge create(Money amount) {
@@ -41,18 +48,24 @@ public class Charge {
                 amount,
                 ChargeStatus.ACTIVE,
                 createdAt,
-                createdAt.plus(EXPIRATION));
+                createdAt.plus(EXPIRATION),
+                null);
     }
 
     public static Charge restore(
-            UUID id, Money amount, ChargeStatus status, Instant createdAt, Instant expiresAt) {
+            UUID id,
+            Money amount,
+            ChargeStatus status,
+            Instant createdAt,
+            Instant expiresAt,
+            Long version) {
         Objects.requireNonNull(id, "O id é obrigatório");
         Objects.requireNonNull(amount, "O montante (Money) é obrigatório");
         Objects.requireNonNull(status, "O status é obrigatório");
         Objects.requireNonNull(createdAt, "A data de criação é obrigatória");
         Objects.requireNonNull(expiresAt, "A data de expiração é obrigatória");
 
-        return new Charge(id, amount, status, createdAt, expiresAt);
+        return new Charge(id, amount, status, createdAt, expiresAt, version);
     }
 
     public void transitionTo(ChargeStatus newStatus) {
@@ -81,6 +94,10 @@ public class Charge {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public Long getVersion() {
+        return version;
     }
 
     @Override

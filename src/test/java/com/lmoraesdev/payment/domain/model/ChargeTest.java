@@ -50,13 +50,14 @@ class ChargeTest {
         Instant createdAt = Instant.parse("2025-01-01T00:00:00Z");
         Instant expiresAt = createdAt.plus(Duration.ofMinutes(30));
 
-        Charge charge = Charge.restore(id, amount, ChargeStatus.PAID, createdAt, expiresAt);
+        Charge charge = Charge.restore(id, amount, ChargeStatus.PAID, createdAt, expiresAt, 3L);
 
         assertThat(charge.getId()).isEqualTo(id);
         assertThat(charge.getStatus()).isEqualTo(ChargeStatus.PAID);
         assertThat(charge.getAmount()).isEqualTo(amount);
         assertThat(charge.getCreatedAt()).isEqualTo(createdAt);
         assertThat(charge.getExpiresAt()).isEqualTo(expiresAt);
+        assertThat(charge.getVersion()).isEqualTo(3L);
     }
 
     @Test
@@ -66,21 +67,23 @@ class ChargeTest {
         Instant now = Instant.now();
         Charge a =
                 Charge.restore(
-                        id, amount, ChargeStatus.ACTIVE, now, now.plus(Duration.ofMinutes(30)));
+                        id, amount, ChargeStatus.ACTIVE, now, now.plus(Duration.ofMinutes(30)), 0L);
         Charge b =
                 Charge.restore(
                         id,
                         new Money(new BigDecimal("99.00")),
                         ChargeStatus.PAID,
                         now,
-                        now.plus(Duration.ofMinutes(30)));
+                        now.plus(Duration.ofMinutes(30)),
+                        1L);
         Charge c =
                 Charge.restore(
                         UUID.randomUUID(),
                         amount,
                         ChargeStatus.ACTIVE,
                         now,
-                        now.plus(Duration.ofMinutes(30)));
+                        now.plus(Duration.ofMinutes(30)),
+                        0L);
 
         assertThat(a).isEqualTo(b);
         assertThat(a).isNotEqualTo(c);
@@ -104,7 +107,7 @@ class ChargeTest {
         Instant now = Instant.now();
         Charge charge =
                 Charge.restore(
-                        id, amount, ChargeStatus.PAID, now, now.plus(Duration.ofMinutes(30)));
+                        id, amount, ChargeStatus.PAID, now, now.plus(Duration.ofMinutes(30)), 0L);
 
         assertThatThrownBy(() -> charge.transitionTo(ChargeStatus.ACTIVE))
                 .isInstanceOf(InvalidStateTransitionException.class)

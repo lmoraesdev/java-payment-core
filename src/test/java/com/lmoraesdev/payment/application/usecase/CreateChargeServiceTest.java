@@ -3,21 +3,16 @@ package com.lmoraesdev.payment.application.usecase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.lmoraesdev.payment.application.port.in.CreateChargeCommand;
 import com.lmoraesdev.payment.application.port.in.CreateChargeResult;
-import com.lmoraesdev.payment.application.port.out.ChargeRepository;
 import com.lmoraesdev.payment.application.port.out.IdempotencyPort;
 import com.lmoraesdev.payment.application.port.out.IdempotencyPort.StoredIdempotency;
-import com.lmoraesdev.payment.application.port.out.OutboxEventPort;
 import com.lmoraesdev.payment.domain.exception.IdempotencyConflictException;
 import com.lmoraesdev.payment.domain.exception.InvalidAmountException;
-import com.lmoraesdev.payment.domain.model.ChargeStatus;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,27 +30,21 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @DisplayName("CreateChargeService")
 @ExtendWith(MockitoExtension.class)
 class CreateChargeServiceTest {
 
-    @Mock ChargeRepository chargeRepository;
-
-    @Mock OutboxEventPort outboxEventPort;
+    @Mock ChargeCreationCoordinator chargeCreationCoordinator;
 
     @Mock IdempotencyPort idempotencyPort;
-
-    SimpleMeterRegistry meterRegistry;
 
     CreateChargeService service;
 
     @BeforeEach
     void setUp() {
-        meterRegistry = new SimpleMeterRegistry();
-        service =
-                new CreateChargeService(
-                        chargeRepository, outboxEventPort, idempotencyPort, meterRegistry);
+        service = new CreateChargeService(chargeCreationCoordinator, idempotencyPort);
     }
 
     record Case(String name, String amount) {
@@ -82,35 +71,38 @@ class CreateChargeServiceTest {
         }
     }
 
+    private static CreateChargeResult aResult(String amount, boolean replayed) {
+        return new CreateChargeResult(
+                UUID.randomUUID(), "ACTIVE", new BigDecimal(amount), Instant.now(), replayed);
+    }
+
     @ParameterizedTest
     @MethodSource("validAmounts")
-    @DisplayName("cria cobrança nova, grava outbox e registra idempotency record")
-    void createsChargeSuccessfully(Case c) {
-        when(chargeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    @DisplayName(
+            "sem registro de idempotência existente, delega criação ao ChargeCreationCoordinator")
+    void delegatesCreationToCoordinatorWhenNoExistingIdempotencyRecord(Case c) {
+        when(idempotencyPort.findByKey("key-" + c.name())).thenReturn(Optional.empty());
+        CreateChargeResult expected = aResult(c.amount(), false);
+        when(chargeCreationCoordinator.createAndPersist(any(), any(), any())).thenReturn(expected);
 
         CreateChargeResult result =
                 service.create(
                         new CreateChargeCommand(new BigDecimal(c.amount()), "key-" + c.name()));
 
-        assertThat(result.id()).isNotNull();
-        assertThat(result.status()).isEqualTo(ChargeStatus.ACTIVE.name());
-        assertThat(result.amount()).isEqualByComparingTo(c.amount());
-        assertThat(result.createdAt()).isNotNull();
-        assertThat(result.replayed()).isFalse();
-        verify(chargeRepository).save(any());
-        verify(outboxEventPort).record(eq("Charge"), any(), eq("ChargeCreated"), any());
-        verify(idempotencyPort).save(eq("key-" + c.name()), any(), any(), eq(result));
-        assertThat(meterRegistry.counter("charges_created_total").count()).isEqualTo(1.0);
+        assertThat(result).isEqualTo(expected);
+        verify(chargeCreationCoordinator).createAndPersist(any(), any(), any());
     }
 
     @Test
-    @DisplayName("propaga InvalidAmountException para amount zero ou negativo")
+    @DisplayName("propaga InvalidAmountException para amount zero ou negativo sem tocar em nada")
     void propagatesExceptionForInvalidAmount() {
         assertThatThrownBy(
                         () ->
                                 service.create(
                                         new CreateChargeCommand(BigDecimal.ZERO, "key-invalid")))
                 .isInstanceOf(InvalidAmountException.class);
+        verify(idempotencyPort, never()).findByKey(any());
+        verify(chargeCreationCoordinator, never()).createAndPersist(any(), any(), any());
     }
 
     @Test
@@ -121,15 +113,9 @@ class CreateChargeServiceTest {
     }
 
     @Test
-    @DisplayName("idempotency key repetida com mesmo body retorna replay sem criar charge nova")
+    @DisplayName("idempotency key repetida com mesmo body retorna replay sem chamar coordinator")
     void returnsReplayForRepeatedKeyWithSameBody() {
-        CreateChargeResult stored =
-                new CreateChargeResult(
-                        UUID.randomUUID(),
-                        "ACTIVE",
-                        new BigDecimal("100.00"),
-                        Instant.now(),
-                        false);
+        CreateChargeResult stored = aResult("100.00", false);
         when(idempotencyPort.findByKey("key-replay"))
                 .thenReturn(Optional.of(new StoredIdempotency(sha256("100.00"), stored)));
 
@@ -141,21 +127,13 @@ class CreateChargeServiceTest {
         assertThat(result.amount()).isEqualByComparingTo(stored.amount());
         assertThat(result.createdAt()).isEqualTo(stored.createdAt());
         assertThat(result.replayed()).isTrue();
-        verify(chargeRepository, never()).save(any());
-        verify(outboxEventPort, never()).record(any(), any(), any(), any());
-        assertThat(meterRegistry.counter("charges_created_total").count()).isEqualTo(0.0);
+        verify(chargeCreationCoordinator, never()).createAndPersist(any(), any(), any());
     }
 
     @Test
     @DisplayName("idempotency key repetida com body diferente lança IdempotencyConflictException")
     void throwsConflictForRepeatedKeyWithDifferentBody() {
-        CreateChargeResult stored =
-                new CreateChargeResult(
-                        UUID.randomUUID(),
-                        "ACTIVE",
-                        new BigDecimal("100.00"),
-                        Instant.now(),
-                        false);
+        CreateChargeResult stored = aResult("100.00", false);
         when(idempotencyPort.findByKey("key-conflict"))
                 .thenReturn(Optional.of(new StoredIdempotency(sha256("100.00"), stored)));
 
@@ -165,6 +143,43 @@ class CreateChargeServiceTest {
                                         new CreateChargeCommand(
                                                 new BigDecimal("200.00"), "key-conflict")))
                 .isInstanceOf(IdempotencyConflictException.class);
-        verify(chargeRepository, never()).save(any());
+        verify(chargeCreationCoordinator, never()).createAndPersist(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName(
+            "duas requisições concorrentes com a mesma key nova: violação de constraint no"
+                    + " coordinator resulta em replay da vencedora, não em erro cru")
+    void returnsWinnersReplayWhenCoordinatorThrowsConstraintViolation() {
+        CreateChargeResult winner = aResult("100.00", false);
+        when(idempotencyPort.findByKey("key-race"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(new StoredIdempotency(sha256("100.00"), winner)));
+        when(chargeCreationCoordinator.createAndPersist(any(), any(), any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        CreateChargeResult result =
+                service.create(new CreateChargeCommand(new BigDecimal("100.00"), "key-race"));
+
+        assertThat(result.id()).isEqualTo(winner.id());
+        assertThat(result.replayed()).isTrue();
+        verify(idempotencyPort, org.mockito.Mockito.times(2)).findByKey("key-race");
+    }
+
+    @Test
+    @DisplayName(
+            "violação de constraint sem registro de idempotência encontrado depois propaga"
+                    + " IllegalStateException")
+    void propagatesIllegalStateExceptionWhenNoRecordFoundAfterConstraintViolation() {
+        when(idempotencyPort.findByKey("key-anomaly")).thenReturn(Optional.empty());
+        when(chargeCreationCoordinator.createAndPersist(any(), any(), any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        assertThatThrownBy(
+                        () ->
+                                service.create(
+                                        new CreateChargeCommand(
+                                                new BigDecimal("100.00"), "key-anomaly")))
+                .isInstanceOf(IllegalStateException.class);
     }
 }
