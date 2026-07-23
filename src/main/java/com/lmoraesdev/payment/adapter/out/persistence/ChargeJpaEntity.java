@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -27,6 +28,10 @@ public class ChargeJpaEntity {
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
+
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     protected ChargeJpaEntity() {}
 
@@ -68,5 +73,13 @@ public class ChargeJpaEntity {
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public Long getVersion() {
+        return version;
+    }
+
+    public void setVersion(Long version) {
+        this.version = version;
     }
 }

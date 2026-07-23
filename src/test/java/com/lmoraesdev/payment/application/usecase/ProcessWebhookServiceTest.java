@@ -13,6 +13,7 @@ import com.lmoraesdev.payment.application.port.out.ChargeRepository;
 import com.lmoraesdev.payment.application.port.out.OutboxEventPort;
 import com.lmoraesdev.payment.application.port.out.WebhookEventPort;
 import com.lmoraesdev.payment.domain.exception.ChargeNotFoundException;
+import com.lmoraesdev.payment.domain.exception.InvalidChargeStatusException;
 import com.lmoraesdev.payment.domain.exception.InvalidStateTransitionException;
 import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 @DisplayName("ProcessWebhookService")
 @ExtendWith(MockitoExtension.class)
@@ -123,6 +125,45 @@ class ProcessWebhookServiceTest {
                                                 "event-4", charge.getId(), "PAID")))
                 .isInstanceOf(InvalidStateTransitionException.class);
         verify(chargeRepository, never()).save(any());
+        verify(webhookEventPort, never()).save(any(), any());
+    }
+
+    @Test
+    @DisplayName(
+            "status recebido inválido lança InvalidChargeStatusException antes de transicionar")
+    void throwsInvalidChargeStatusExceptionForUnknownStatus() {
+        Charge charge = ChargeTestData.aCharge().withStatus(ChargeStatus.ACTIVE).build();
+        when(webhookEventPort.existsByEventId("event-6")).thenReturn(false);
+        when(chargeRepository.findById(charge.getId())).thenReturn(Optional.of(charge));
+
+        assertThatThrownBy(
+                        () ->
+                                service.process(
+                                        new ProcessWebhookCommand(
+                                                "event-6", charge.getId(), "BOGUS_STATUS")))
+                .isInstanceOf(InvalidChargeStatusException.class);
+        assertThat(charge.getStatus()).isEqualTo(ChargeStatus.ACTIVE);
+        verify(chargeRepository, never()).save(any());
+        verify(outboxEventPort, never()).record(any(), any(), any(), any());
+        verify(webhookEventPort, never()).save(any(), any());
+    }
+
+    @Test
+    @DisplayName(
+            "conflito de otimistic locking ao salvar propaga OptimisticLockingFailureException")
+    void propagatesOptimisticLockingFailureExceptionOnConcurrentUpdate() {
+        Charge charge = ChargeTestData.aCharge().withStatus(ChargeStatus.ACTIVE).build();
+        when(webhookEventPort.existsByEventId("event-7")).thenReturn(false);
+        when(chargeRepository.findById(charge.getId())).thenReturn(Optional.of(charge));
+        when(chargeRepository.save(charge))
+                .thenThrow(new OptimisticLockingFailureException("stale charge"));
+
+        assertThatThrownBy(
+                        () ->
+                                service.process(
+                                        new ProcessWebhookCommand(
+                                                "event-7", charge.getId(), "PAID")))
+                .isInstanceOf(OptimisticLockingFailureException.class);
         verify(webhookEventPort, never()).save(any(), any());
     }
 }

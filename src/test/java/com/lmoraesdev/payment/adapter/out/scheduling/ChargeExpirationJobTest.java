@@ -1,14 +1,13 @@
 package com.lmoraesdev.payment.adapter.out.scheduling;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.lmoraesdev.payment.application.port.out.ChargeRepository;
-import com.lmoraesdev.payment.application.port.out.OutboxEventPort;
 import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
 import com.lmoraesdev.payment.testdata.ChargeTestData;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 @DisplayName("ChargeExpirationJob")
 @ExtendWith(MockitoExtension.class)
@@ -26,32 +26,46 @@ class ChargeExpirationJobTest {
 
     @Mock ChargeRepository chargeRepository;
 
-    @Mock OutboxEventPort outboxEventPort;
+    @Mock ChargeExpirationCoordinator chargeExpirationCoordinator;
 
     @InjectMocks ChargeExpirationJob job;
 
     @Test
-    @DisplayName("charge vencida transiciona pra EXPIRED, salva e grava outbox")
-    void expiresOverdueCharge() {
+    @DisplayName("charge vencida é reivindicada via ChargeExpirationCoordinator")
+    void expiresOverdueChargeThroughCoordinator() {
         Charge charge = ChargeTestData.aCharge().withStatus(ChargeStatus.ACTIVE).build();
         when(chargeRepository.findExpiredActive(any())).thenReturn(List.of(charge));
 
         job.expireOverdueCharges();
 
-        assertThat(charge.getStatus()).isEqualTo(ChargeStatus.EXPIRED);
-        verify(chargeRepository).save(charge);
-        verify(outboxEventPort)
-                .record(eq("Charge"), eq(charge.getId().toString()), eq("ChargeExpired"), any());
+        verify(chargeExpirationCoordinator).expireOne(charge);
     }
 
     @Test
-    @DisplayName("lista vazia não faz nada")
+    @DisplayName("lista vazia não chama o coordinator")
     void doesNothingWhenListIsEmpty() {
         when(chargeRepository.findExpiredActive(any())).thenReturn(List.of());
 
         job.expireOverdueCharges();
 
-        verify(chargeRepository, never()).save(any());
-        verify(outboxEventPort, never()).record(any(), any(), any(), any());
+        verify(chargeExpirationCoordinator, never()).expireOne(any());
+    }
+
+    @Test
+    @DisplayName(
+            "conflito de otimistic locking numa charge não impede as outras de serem processadas"
+                    + " nem propaga")
+    void skipsChargeOnOptimisticLockConflictWithoutStoppingOthers() {
+        Charge conflicting = ChargeTestData.aCharge().withStatus(ChargeStatus.ACTIVE).build();
+        Charge healthy = ChargeTestData.aCharge().withStatus(ChargeStatus.ACTIVE).build();
+        when(chargeRepository.findExpiredActive(any())).thenReturn(List.of(conflicting, healthy));
+        doThrow(new OptimisticLockingFailureException("stale charge"))
+                .when(chargeExpirationCoordinator)
+                .expireOne(conflicting);
+
+        assertThatCode(() -> job.expireOverdueCharges()).doesNotThrowAnyException();
+
+        verify(chargeExpirationCoordinator).expireOne(conflicting);
+        verify(chargeExpirationCoordinator).expireOne(healthy);
     }
 }

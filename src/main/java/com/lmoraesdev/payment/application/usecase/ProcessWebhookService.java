@@ -8,6 +8,7 @@ import com.lmoraesdev.payment.application.port.out.WebhookEventPort;
 import com.lmoraesdev.payment.config.logging.Logger5w1hBuilder;
 import com.lmoraesdev.payment.domain.event.ChargeStatusChangedEvent;
 import com.lmoraesdev.payment.domain.exception.ChargeNotFoundException;
+import com.lmoraesdev.payment.domain.exception.InvalidChargeStatusException;
 import com.lmoraesdev.payment.domain.model.Charge;
 import com.lmoraesdev.payment.domain.model.ChargeStatus;
 import io.micrometer.core.instrument.Counter;
@@ -56,7 +57,7 @@ public class ProcessWebhookService implements ProcessWebhook {
                         .orElseThrow(() -> new ChargeNotFoundException(command.chargeId()));
 
         ChargeStatus previousStatus = charge.getStatus();
-        ChargeStatus newStatus = ChargeStatus.valueOf(command.status());
+        ChargeStatus newStatus = parseStatus(command.status());
 
         charge.transitionTo(newStatus);
 
@@ -88,5 +89,13 @@ public class ProcessWebhookService implements ProcessWebhook {
                 .who("system")
                 .how("processWebhook")
                 .info();
+    }
+
+    private ChargeStatus parseStatus(String status) {
+        try {
+            return ChargeStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidChargeStatusException(status);
+        }
     }
 }

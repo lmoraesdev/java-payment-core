@@ -37,6 +37,7 @@ class ChargeRepositoryIT extends AbstractIntegrationTest {
         assertThat(result.getAmount().amount()).isEqualByComparingTo(charge.getAmount().amount());
         assertThat(result.getStatus()).isEqualTo(charge.getStatus());
         assertThat(result.getCreatedAt()).isEqualTo(charge.getCreatedAt());
+        assertThat(result.getVersion()).isEqualTo(0L);
     }
 
     @Test
@@ -58,7 +59,8 @@ class ChargeRepositoryIT extends AbstractIntegrationTest {
                         ChargeTestData.money("10.00"),
                         ChargeStatus.ACTIVE,
                         createdAt,
-                        overdueExpiresAt);
+                        overdueExpiresAt,
+                        null);
         chargeRepository.save(overdue);
 
         Charge notYetExpired = ChargeTestData.aCharge().withStatus(ChargeStatus.ACTIVE).build();

@@ -12,6 +12,7 @@ public final class ChargeTestData {
 
     private Money amount = new Money(new BigDecimal("10.50"));
     private ChargeStatus status = ChargeStatus.ACTIVE;
+    private Long version = 0L;
 
     private ChargeTestData() {}
 
@@ -33,9 +34,14 @@ public final class ChargeTestData {
         return this;
     }
 
+    public ChargeTestData withVersion(Long v) {
+        this.version = v;
+        return this;
+    }
+
     public Charge build() {
         Instant now = Instant.now();
         return Charge.restore(
-                UUID.randomUUID(), amount, status, now, now.plus(Duration.ofMinutes(30)));
+                UUID.randomUUID(), amount, status, now, now.plus(Duration.ofMinutes(30)), version);
     }
 }
